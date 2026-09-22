@@ -2,7 +2,25 @@
 
 SY 即时通信 Android 库。封装 **OpenIM Android SDK**（Maven Central），AppID / 控制面模型与 `rtc-android-sdk` 一致。
 
-## Maven 坐标（OpenIM）
+**当前版本：0.4.1**
+
+## 安装（JitPack）
+
+```gradle
+repositories {
+    mavenCentral()
+    google()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation 'com.github.carlcy:sy-im-android-sdk:v0.4.1'
+}
+```
+
+源码 zip：`https://syrtcapi.shengyuchenyao.cn/downloads/sy-im-android-0.4.1.zip`
+
+## Maven 坐标（OpenIM 传递依赖）
 
 已在本库 `build.gradle.kts` 声明：
 

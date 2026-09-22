@@ -16,7 +16,7 @@ import java.util.concurrent.Executors
  * SY IM 控制面 REST 封装（非 OpenIM 原生 SDK）。
  *
  * - getToken → POST /api/user/im/token 或 /api/server/im/token
- * - friends / groups / send / history / revoke → /api/user/im/*
+ * - friends / groups / send / history / revoke → /api/user/im/…
  *
  * 实时收发仍依赖 OpenIM Android SDK（见 [OpenImBridge]）；本类负责控制面运维 API。
  * 不宣称腾讯云 TIM 全 API 对等。
@@ -192,7 +192,7 @@ class ImControlPlane(
     }
 
     private fun authHeaders(): Map<String, String> {
-        val jwt = userJwt ?: throw Exception("userJwt required for /api/user/im/*")
+        val jwt = userJwt ?: throw Exception("userJwt required for /api/user/im/…")
         return mapOf(
             "Authorization" to "Bearer $jwt",
             "Content-Type" to "application/json",

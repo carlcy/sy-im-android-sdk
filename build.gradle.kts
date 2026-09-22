@@ -64,7 +64,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.sy.im"
                 artifactId = "sy-im-android-sdk"
-                version = "0.4.0"
+                version = "0.4.1"
             }
         }
     }

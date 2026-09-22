@@ -1,0 +1,4 @@
+jdk:
+  - openjdk17
+before_install:
+  - sdk-manager "build-tools;35.0.0" "platforms;android-35"
