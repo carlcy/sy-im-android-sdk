@@ -1,0 +1,5 @@
+// 已迁移为正式 build.gradle.kts，请直接使用根目录 build.gradle.kts
+// OpenIM 坐标：
+//   implementation("io.openim:android-sdk:3.8.3.5@aar")
+//   implementation("io.openim:core-sdk:3.8.3-patch15@aar")
+//   implementation("com.google.code.gson:gson:2.10.1")
