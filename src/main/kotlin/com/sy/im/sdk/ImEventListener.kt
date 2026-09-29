@@ -23,4 +23,17 @@ interface ImEventListener {
         groupId: String?,
         text: String?,
     ) {}
+
+    /**
+     * 单聊已读回执。对方调用标记已读后触发。
+     * @param readUserId 已读方用户 ID
+     * @param msgIds 已读的客户端消息 ID
+     */
+    fun onRecvC2CReadReceipt(readUserId: String, msgIds: List<String>) {}
+
+    /** 群已读回执（OpenIM 群回执；仅消除/更新已读，不宣称腾讯群回执全量对等）。 */
+    fun onRecvGroupReadReceipt(conversationId: String) {}
+
+    /** 全部会话未读总数变化。 */
+    fun onTotalUnreadCountChanged(count: Int) {}
 }

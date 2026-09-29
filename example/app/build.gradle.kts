@@ -40,10 +40,18 @@ android {
     }
 }
 
+val useLocalSdk = providers.gradleProperty("useLocalSdk").orNull == "true"
+val syImSdkVersion = providers.gradleProperty("syImSdkVersion").get()
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
-    implementation(project(":sy-im-android-sdk"))
+    // 客户同款坐标。SDK 开发：./gradlew -PuseLocalSdk=true :app:assembleDebug
+    if (useLocalSdk) {
+        implementation(project(":sy-im-android-sdk"))
+    } else {
+        implementation("com.github.carlcy:sy-im-android-sdk:$syImSdkVersion")
+    }
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

@@ -14,7 +14,9 @@ import android.util.Log
  * - [login] → OpenIMClient.login
  * - [logout] → OpenIMClient.logout
  * - [sendTextMessage] → createTextMessage + sendMessage
- * - [setEventListener] → OnConnListener / OnAdvanceMsgListener
+ * - [markConversationAsRead] → markConversationMessageAsRead（单聊同时发已读回执）
+ * - [getUnreadCount] → getTotalUnreadMsgCount
+ * - [setEventListener] → OnConnListener / OnAdvanceMsgListener / OnConversationListener
  *
  * 示例默认 [ImInitConfig.useMock]=true，无需真实 OpenIM；切 false 并配置
  * [ImInitConfig.imApiAddr]/[ImInitConfig.imWsAddr] 即可走真链路。
@@ -152,6 +154,90 @@ class ImEngine private constructor(
 
         return openIm?.sendTextMessage(userId, groupId, text)
             ?: error("OpenIM not initialized")
+    }
+
+    /**
+     * 将会话标为已读。单聊会向对端发送已读回执；群聊只清未读。
+     * 传 [conversationId]，或传 [userId] / [groupId] 由 OpenIM 换算会话 ID。
+     * 控制面 REST 等价接口是 [ImControlPlane.markConversationRead]（`POST /api/user/im/conversations/mark-read`）。
+     */
+    @JvmOverloads
+    fun markConversationAsRead(
+        conversationId: String? = null,
+        userId: String? = null,
+        groupId: String? = null,
+        callback: ImCallback? = null,
+    ) {
+        check(loggedIn) { "login required" }
+        require(!conversationId.isNullOrBlank() || !userId.isNullOrBlank() || !groupId.isNullOrBlank()) {
+            "provide conversationId, userId, or groupId"
+        }
+        if (config.useMock) {
+            Log.i(TAG, "mock markRead conversation=$conversationId user=$userId group=$groupId")
+            mainHandler.post { callback?.onResult(true, 0, "mock-read-ok") }
+            return
+        }
+        val bridge = openIm ?: run {
+            callback?.onResult(false, -1, "OpenIM not initialized")
+            return
+        }
+        val cid = when {
+            !conversationId.isNullOrBlank() -> conversationId
+            !groupId.isNullOrBlank() -> bridge.conversationId(groupId, group = true)
+            else -> bridge.conversationId(userId!!, group = false)
+        }
+        bridge.markConversationAsRead(cid, ImCallback { success, code, message ->
+            mainHandler.post { callback?.onResult(success, code, message) }
+        })
+    }
+
+    /**
+     * 按消息 ID 标记已读（单聊已读回执）。
+     */
+    fun markMessagesAsRead(
+        conversationId: String,
+        clientMsgIds: List<String>,
+        callback: ImCallback? = null,
+    ) {
+        check(loggedIn) { "login required" }
+        require(conversationId.isNotBlank()) { "conversationId blank" }
+        require(clientMsgIds.isNotEmpty()) { "clientMsgIds empty" }
+        if (config.useMock) {
+            mainHandler.post { callback?.onResult(true, 0, "mock-read-ok") }
+            return
+        }
+        val bridge = openIm ?: run {
+            callback?.onResult(false, -1, "OpenIM not initialized")
+            return
+        }
+        bridge.markMessagesAsRead(conversationId, clientMsgIds, ImCallback { success, code, message ->
+            mainHandler.post { callback?.onResult(success, code, message) }
+        })
+    }
+
+    /**
+     * 当前登录用户的未读总数（OpenIM）。
+     * 控制面 REST： [ImControlPlane.getUnreadCount] → `POST /api/user/im/unread`，响应 `totalUnread`。
+     */
+    fun getUnreadCount(callback: (count: Int?, error: Exception?) -> Unit) {
+        if (config.useMock) {
+            mainHandler.post { callback(0, null) }
+            return
+        }
+        if (!loggedIn) {
+            mainHandler.post { callback(null, IllegalStateException("login required")) }
+            return
+        }
+        val bridge = openIm ?: run {
+            mainHandler.post { callback(null, IllegalStateException("OpenIM not initialized")) }
+            return
+        }
+        bridge.getTotalUnreadCount { count, code, message ->
+            mainHandler.post {
+                if (count != null) callback(count, null)
+                else callback(null, Exception(message ?: "unread failed ($code)"))
+            }
+        }
     }
 
     companion object {

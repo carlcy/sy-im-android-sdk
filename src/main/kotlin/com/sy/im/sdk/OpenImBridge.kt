@@ -3,10 +3,14 @@ package com.sy.im.sdk
 import android.app.Application
 import android.util.Log
 import io.openim.android.sdk.OpenIMClient
+import io.openim.android.sdk.enums.ConversationType
 import io.openim.android.sdk.listener.OnAdvanceMsgListener
 import io.openim.android.sdk.listener.OnBase
 import io.openim.android.sdk.listener.OnConnListener
+import io.openim.android.sdk.listener.OnConversationListener
 import io.openim.android.sdk.listener.OnMsgSendCallback
+import io.openim.android.sdk.models.C2CReadReceiptInfo
+import io.openim.android.sdk.models.GroupMessageReceipt
 import io.openim.android.sdk.models.InitConfig
 import io.openim.android.sdk.models.Message
 import io.openim.android.sdk.models.OfflinePushInfo
@@ -69,6 +73,27 @@ internal class OpenImBridge(
                             groupId,
                             text,
                         )
+                    }
+
+                    override fun onRecvC2CReadReceipt(list: MutableList<C2CReadReceiptInfo>?) {
+                        list.orEmpty().forEach { info ->
+                            listenerProvider()?.onRecvC2CReadReceipt(
+                                info.userID ?: "",
+                                info.msgIDList ?: emptyList(),
+                            )
+                        }
+                    }
+
+                    override fun onRecvGroupMessageReadReceipt(receipt: GroupMessageReceipt?) {
+                        if (receipt == null) return
+                        listenerProvider()?.onRecvGroupReadReceipt(receipt.conversationID ?: "")
+                    }
+                },
+            )
+            OpenIMClient.getInstance().conversationManager.setOnConversationListener(
+                object : OnConversationListener {
+                    override fun onTotalUnreadMessageCountChanged(count: Int) {
+                        listenerProvider()?.onTotalUnreadCountChanged(count)
                     }
                 },
             )
@@ -137,5 +162,58 @@ internal class OpenImBridge(
             push,
         )
         return clientId
+    }
+
+    /** 单聊 sessionType=1；OpenIM 3.8 群会话为超级群 sessionType=3。 */
+    fun conversationId(sourceId: String, group: Boolean): String {
+        val sessionType = if (group) ConversationType.SUPER_GROUP_CHAT else ConversationType.SINGLE_CHAT
+        return OpenIMClient.getInstance().conversationManager
+            .getConversationIDBySessionType(sourceId, sessionType)
+    }
+
+    fun markConversationAsRead(conversationId: String, callback: ImCallback?) {
+        OpenIMClient.getInstance().messageManager.markConversationMessageAsRead(
+            conversationId,
+            object : OnBase<String> {
+                override fun onSuccess(data: String?) {
+                    callback?.onResult(true, 0, data)
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback?.onResult(false, code, error)
+                }
+            },
+        )
+    }
+
+    @Suppress("DEPRECATION")
+    fun markMessagesAsRead(conversationId: String, clientMsgIds: List<String>, callback: ImCallback?) {
+        OpenIMClient.getInstance().messageManager.markMessagesAsReadByMsgID(
+            conversationId,
+            clientMsgIds,
+            object : OnBase<String> {
+                override fun onSuccess(data: String?) {
+                    callback?.onResult(true, 0, data)
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback?.onResult(false, code, error)
+                }
+            },
+        )
+    }
+
+    fun getTotalUnreadCount(callback: (count: Int?, code: Int, message: String?) -> Unit) {
+        OpenIMClient.getInstance().conversationManager.getTotalUnreadMsgCount(
+            object : OnBase<String> {
+                override fun onSuccess(data: String?) {
+                    callback(data?.trim()?.toIntOrNull(), 0, data)
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback(null, code, error)
+                }
+            },
+        )
     }
 }
