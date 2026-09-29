@@ -10,10 +10,17 @@ import io.openim.android.sdk.listener.OnConnListener
 import io.openim.android.sdk.listener.OnConversationListener
 import io.openim.android.sdk.listener.OnMsgSendCallback
 import io.openim.android.sdk.models.C2CReadReceiptInfo
+import io.openim.android.sdk.models.ConversationInfo
+import io.openim.android.sdk.models.ConversationReq
+import io.openim.android.sdk.models.GroupInfo
 import io.openim.android.sdk.models.GroupMessageReceipt
 import io.openim.android.sdk.models.InitConfig
 import io.openim.android.sdk.models.Message
 import io.openim.android.sdk.models.OfflinePushInfo
+import io.openim.android.sdk.models.RevokedInfo
+import io.openim.android.sdk.models.SearchResult
+import io.openim.android.sdk.models.UserInfo
+import io.openim.android.sdk.models.UserInfoReq
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -25,6 +32,8 @@ internal class OpenImBridge(
     private val app: Application,
     private val config: ImInitConfig,
     private val listenerProvider: () -> ImEventListener?,
+    private val onConversations: (List<ImConversation>) -> Unit,
+    private val onTotalUnread: (Int) -> Unit,
 ) {
     private val tag = "SyOpenImBridge"
     private val inited = AtomicBoolean(false)
@@ -67,12 +76,19 @@ internal class OpenImBridge(
                         if (msg == null) return
                         val text = msg.textElem?.content
                         val groupId = msg.groupID?.takeIf { it.isNotBlank() }
+                        val atText = msg.atTextElem?.text
+                        val customText = msg.customElem?.description ?: msg.customElem?.data
                         listenerProvider()?.onRecvNewMessage(
                             msg.clientMsgID ?: "",
                             msg.sendID ?: "",
                             groupId,
-                            text,
+                            text ?: atText ?: customText,
                         )
+                    }
+
+                    override fun onRecvMessageRevokedV2(info: RevokedInfo?) {
+                        if (info == null) return
+                        listenerProvider()?.onMessageRevoked(info.clientMsgID ?: "", info.revokerID ?: "")
                     }
 
                     override fun onRecvC2CReadReceipt(list: MutableList<C2CReadReceiptInfo>?) {
@@ -93,7 +109,19 @@ internal class OpenImBridge(
             OpenIMClient.getInstance().conversationManager.setOnConversationListener(
                 object : OnConversationListener {
                     override fun onTotalUnreadMessageCountChanged(count: Int) {
-                        listenerProvider()?.onTotalUnreadCountChanged(count)
+                        onTotalUnread(count)
+                    }
+
+                    override fun onConversationChanged(list: MutableList<ConversationInfo>?) {
+                        onConversations(list.orEmpty().map { it.toIm() })
+                    }
+
+                    override fun onNewConversation(list: MutableList<ConversationInfo>?) {
+                        onConversations(list.orEmpty().map { it.toIm() })
+                    }
+
+                    override fun onConversationUserInputStatusChanged(data: String?) {
+                        listenerProvider()?.onTypingStatusChanged(data ?: "")
                     }
                 },
             )
@@ -137,12 +165,36 @@ internal class OpenImBridge(
 
     fun sendTextMessage(userId: String?, groupId: String?, text: String): String {
         val msg = OpenIMClient.getInstance().messageManager.createTextMessage(text)
+        return dispatchSend(msg, userId, groupId, text)
+    }
+
+    fun sendAtTextMessage(groupId: String, text: String, atUserIds: List<String>, atAll: Boolean): String {
+        val ids = ArrayList<String>(atUserIds.size + 1)
+        ids.addAll(atUserIds)
+        if (atAll) {
+            val tag = OpenIMClient.getInstance().conversationManager.atAllTag
+            if (!tag.isNullOrBlank()) ids.add(tag)
+        }
+        val msg = OpenIMClient.getInstance().messageManager.createTextAtMessage(text, ids, null, null)
+        return dispatchSend(msg, null, groupId, text)
+    }
+
+    fun sendCustomMessage(
+        userId: String?,
+        groupId: String?,
+        data: String,
+        extension: String,
+        description: String,
+    ): String {
+        val msg = OpenIMClient.getInstance().messageManager.createCustomMessage(data, extension, description)
+        return dispatchSend(msg, userId, groupId, description.ifBlank { data })
+    }
+
+    private fun dispatchSend(msg: Message, userId: String?, groupId: String?, preview: String): String {
         val clientId = msg.clientMsgID ?: "openim_${System.currentTimeMillis()}"
-        val recv = userId.orEmpty()
-        val group = groupId.orEmpty()
         val push = OfflinePushInfo().apply {
             title = "新消息"
-            desc = text.take(64)
+            desc = preview.take(64)
         }
         OpenIMClient.getInstance().messageManager.sendMessage(
             object : OnMsgSendCallback {
@@ -157,8 +209,8 @@ internal class OpenImBridge(
                 override fun onProgress(progress: Long) {}
             },
             msg,
-            recv,
-            group,
+            userId.orEmpty(),
+            groupId.orEmpty(),
             push,
         )
         return clientId
@@ -216,4 +268,158 @@ internal class OpenImBridge(
             },
         )
     }
+
+    fun getAllConversations(callback: (List<ImConversation>?, Int, String?) -> Unit) {
+        OpenIMClient.getInstance().conversationManager.getAllConversationList(
+            object : OnBase<List<ConversationInfo>> {
+                override fun onSuccess(data: List<ConversationInfo>?) {
+                    callback(data.orEmpty().map { it.toIm() }, 0, null)
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback(null, code, error)
+                }
+            },
+        )
+    }
+
+    fun getConversationsById(conversationIds: List<String>, callback: (List<ImConversation>?, Int, String?) -> Unit) {
+        OpenIMClient.getInstance().conversationManager.getMultipleConversation(
+            object : OnBase<List<ConversationInfo>> {
+                override fun onSuccess(data: List<ConversationInfo>?) {
+                    callback(data.orEmpty().map { it.toIm() }, 0, null)
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback(null, code, error)
+                }
+            },
+            conversationIds,
+        )
+    }
+
+    fun revokeMessage(conversationId: String, clientMsgId: String, callback: ImCallback?) {
+        OpenIMClient.getInstance().messageManager.revokeMessageV2(stringBase(callback), conversationId, clientMsgId)
+    }
+
+    fun searchLocalMessages(
+        keyword: String,
+        conversationId: String?,
+        callback: (List<ImSearchHit>?, Int, String?) -> Unit,
+    ) {
+        OpenIMClient.getInstance().messageManager.searchLocalMessages(
+            object : OnBase<SearchResult> {
+                override fun onSuccess(data: SearchResult?) {
+                    val items = data?.searchResultItems ?: data?.findResultItems ?: emptyList()
+                    callback(
+                        items.map { item ->
+                            val first = item.messageList?.firstOrNull()
+                            ImSearchHit(
+                                conversationId = item.conversationID ?: "",
+                                showName = item.showName,
+                                messageCount = item.messageCount,
+                                preview = first?.textElem?.content ?: first?.atTextElem?.text ?: first?.customElem?.description,
+                            )
+                        },
+                        0,
+                        null,
+                    )
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback(null, code, error)
+                }
+            },
+            conversationId,
+            listOf(keyword),
+            2,
+            emptyList(),
+            emptyList(),
+            0,
+            0,
+            1,
+            20,
+        )
+    }
+
+    fun pinConversation(conversationId: String, pinned: Boolean, callback: ImCallback?) {
+        val req = ConversationReq().apply { setPinned(pinned) }
+        OpenIMClient.getInstance().conversationManager.setConversation(stringBase(callback), conversationId, req)
+    }
+
+    fun setConversationDraft(conversationId: String, draft: String, callback: ImCallback?) {
+        OpenIMClient.getInstance().conversationManager.setConversationDraft(stringBase(callback), conversationId, draft)
+    }
+
+    fun setConversationDoNotDisturb(conversationId: String, enabled: Boolean, callback: ImCallback?) {
+        val req = ConversationReq().apply { recvMsgOpt = if (enabled) 2 else 0 }
+        OpenIMClient.getInstance().conversationManager.setConversation(stringBase(callback), conversationId, req)
+    }
+
+    fun updateTyping(userId: String, conversationId: String?, typing: Boolean, callback: ImCallback?) {
+        OpenIMClient.getInstance().messageManager.typingStatusUpdate(
+            stringBase(callback),
+            userId,
+            if (typing) "yes" else "no",
+        )
+        if (!conversationId.isNullOrBlank()) {
+            OpenIMClient.getInstance().conversationManager.changeInputStates(stringBase(null), conversationId, typing)
+        }
+    }
+
+    fun setSelfEx(ex: String, callback: ImCallback?) {
+        val req = UserInfoReq().apply { this.ex = ex }
+        OpenIMClient.getInstance().userInfoManager.setSelfInfo(stringBase(callback), req)
+    }
+
+    fun setGroupEx(groupId: String, ex: String, callback: ImCallback?) {
+        val info = GroupInfo().apply {
+            setGroupID(groupId)
+            setEx(ex)
+        }
+        OpenIMClient.getInstance().groupManager.setGroupInfo(info, stringBase(callback))
+    }
+
+    fun addToBlacklist(userId: String, callback: ImCallback?) {
+        OpenIMClient.getInstance().friendshipManager.addBlacklist(stringBase(callback), userId)
+    }
+
+    fun removeFromBlacklist(userId: String, callback: ImCallback?) {
+        OpenIMClient.getInstance().friendshipManager.removeBlacklist(stringBase(callback), userId)
+    }
+
+    fun getBlacklist(callback: (List<String>?, Int, String?) -> Unit) {
+        OpenIMClient.getInstance().friendshipManager.getBlacklist(
+            object : OnBase<List<UserInfo>> {
+                override fun onSuccess(data: List<UserInfo>?) {
+                    callback(data.orEmpty().mapNotNull { it.userID?.takeIf { id -> id.isNotBlank() } }, 0, null)
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback(null, code, error)
+                }
+            },
+        )
+    }
+
+    private fun stringBase(callback: ImCallback?): OnBase<String> = object : OnBase<String> {
+        override fun onSuccess(data: String?) {
+            callback?.onResult(true, 0, data)
+        }
+
+        override fun onError(code: Int, error: String?) {
+            callback?.onResult(false, code, error)
+        }
+    }
+
+    private fun ConversationInfo.toIm(): ImConversation = ImConversation(
+        conversationId = conversationID ?: "",
+        userId = userID?.takeIf { it.isNotBlank() },
+        groupId = groupID?.takeIf { it.isNotBlank() },
+        showName = showName,
+        unreadCount = unreadCount,
+        pinned = isPinned,
+        draft = draftText,
+        doNotDisturb = recvMsgOpt != 0,
+    )
 }

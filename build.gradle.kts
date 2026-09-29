@@ -6,7 +6,7 @@ plugins {
 }
 
 // JitPack 坐标：com.github.carlcy:sy-im-android-sdk:<git tag>
-// 默认版本取 VERSION 文件并加上 v 前缀，与 tag（例如 v0.4.2）一致。
+// 默认版本取 VERSION 文件并加上 v 前缀，与 tag（例如 v0.5.0）一致。
 // JitPack / 本地发布可覆盖：-Pgroup=... -Pversion=...
 val requestedGroup = providers.gradleProperty("group").orNull
     ?.takeIf { it.isNotBlank() && it != "unspecified" }
@@ -27,6 +27,7 @@ android {
         minSdk = 24
         consumerProguardFiles("consumer-rules.pro")
         buildConfigField("boolean", "OPENIM_AVAILABLE", "true")
+        buildConfigField("String", "SDK_VERSION", "\"$fileVersion\"")
     }
 
     buildFeatures {
@@ -77,6 +78,12 @@ dependencies {
     api("io.openim:android-sdk:3.8.3.5")
     api("io.openim:core-sdk:3.8.3-patch15")
     api("com.google.code.gson:gson:2.10.1")
+
+    testImplementation("junit:junit:4.13.2")
+}
+
+tasks.matching { it.name.endsWith("UnitTest") }.configureEach {
+    dependsOn("generatePomFileForReleasePublication")
 }
 
 val signingKey = providers.gradleProperty("signingKey").orNull ?: System.getenv("SIGNING_KEY")

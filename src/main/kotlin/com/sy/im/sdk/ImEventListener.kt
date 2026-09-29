@@ -34,6 +34,15 @@ interface ImEventListener {
     /** 群已读回执（OpenIM 群回执；仅消除/更新已读，不宣称腾讯群回执全量对等）。 */
     fun onRecvGroupReadReceipt(conversationId: String) {}
 
-    /** 全部会话未读总数变化。 */
+    /** 全部会话未读总数变化。标记已读后会立刻回调，不等待 OpenIM 回包。 */
     fun onTotalUnreadCountChanged(count: Int) {}
+
+    /** 单个会话未读数变化。 */
+    fun onConversationUnreadChanged(conversationId: String, unreadCount: Int) {}
+
+    /** 消息被撤回。 */
+    fun onMessageRevoked(clientMsgId: String, revokerId: String) {}
+
+    /** 对方正在输入。内容为 OpenIM 原样字符串。 */
+    fun onTypingStatusChanged(data: String) {}
 }
