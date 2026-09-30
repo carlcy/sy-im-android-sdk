@@ -347,10 +347,8 @@ class ImControlPlane(
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.use { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() } ?: ""
-        val json = if (text.isBlank()) JSONObject() else JSONObject(text)
-        if (code !in 200..299 || json.optInt("code", if (code in 200..299) 0 else -1) != 0) {
-            throw Exception(json.optString("msg", "HTTP $code $text"))
-        }
+        val json = parseBody(text)
+        checkResponse(code, json, text)
         val data = json.opt("data")
         return when (data) {
             is JSONObject -> data.keys().asSequence().associateWith { data.get(it) }
@@ -361,5 +359,17 @@ class ImControlPlane(
 
     companion object {
         private const val TAG = "ImControlPlane"
+
+        internal fun parseBody(text: String): JSONObject =
+            if (text.isBlank()) JSONObject() else try { JSONObject(text) } catch (_: Exception) { JSONObject() }
+
+        /** 非 2xx 或业务码非 0 时抛 [ImControlPlaneException]。 */
+        internal fun checkResponse(httpStatus: Int, json: JSONObject, rawText: String) {
+            val ok = httpStatus in 200..299
+            val biz = if (json.has("code")) json.optInt("code", -1) else if (ok) 0 else httpStatus
+            if (ok && biz == 0) return
+            val msg = json.optString("msg").ifBlank { "HTTP $httpStatus ${rawText.take(200)}".trim() }
+            throw ImControlPlaneException(biz, httpStatus, msg)
+        }
     }
 }

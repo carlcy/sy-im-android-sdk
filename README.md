@@ -134,6 +134,30 @@ engine.setUnreadListener { total, conversations ->
 
 原有 `getToken`、`addFriend`、`listFriends`、`createGroup`、`listGroups`、`send`、`history`、`revoke` 不变。
 
+## 错误码
+
+控制面（`ImControlPlane`，即 `/api/user/im/…`、`/api/server/im/token`）失败时，回调里的 `Exception` 是 `ImControlPlaneException`：`code` 为服务端业务码，`httpStatus` 为 HTTP 状态。取值在 `ImErrorCode`，与 iOS `SyImErrorCode`、Flutter `SyImErrorCode` 相同：
+
+| code | 常量 | 含义 |
+|---|---|---|
+| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN` | JWT 无效 / 无权访问该应用 |
+| 3001 | `IM_NOT_ENABLED` | 应用未开通 IM |
+| 3003 / 3004 | `QUOTA_MAU` / `QUOTA_MESSAGES` | 月活 / 消息量超出套餐 |
+| 4003 | `TRIAL_RETIRED` | 体验版已下线 |
+| 4005 | `SENSITIVE_REJECTED` | 敏感词拦截 |
+| 4006 | `CONTENT_REJECTED` | 发送前内容审核拒绝或审核服务不可达 |
+| 4031 / 4032 / 4033 | `CREDENTIAL_SUSPENDED` / `REVOKED` / `EXPIRED` | AppId 访问凭证暂停 / 吊销 / 过期 |
+| 4290 | `RATE_LIMITED` | 请求过于频繁 |
+
+```kotlin
+controlPlane.getToken(userId) { data, error ->
+    val code = (error as? ImControlPlaneException)?.code
+    if (code != null && ImErrorCode.isCredentialBlocked(code)) { /* 提示凭证不可用 */ }
+}
+```
+
+OpenIM SDK 自己的错误（登录、实时收发，`ImCallback` / `onConnectFailed`）是 OpenIM 错误码，原样透传。
+
 ## 运行 Demo
 
 Demo 用和客户一样的坐标，不下载 zip。
