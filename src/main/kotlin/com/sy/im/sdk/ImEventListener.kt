@@ -34,6 +34,13 @@ interface ImEventListener {
     /** 群已读回执（OpenIM 群回执；仅消除/更新已读，不宣称腾讯群回执全量对等）。 */
     fun onRecvGroupReadReceipt(conversationId: String) {}
 
+    /**
+     * 已读回执（单聊 + 群聊统一，三端相同）。每个已读者一条 [ImReadReceipt]。
+     * 单聊与 [onRecvC2CReadReceipt] 同时回调；群聊把 OpenIM 的「消息 → 已读成员」转成「已读者 → 消息 id」，
+     * 与 iOS 相同。
+     */
+    fun onRecvReadReceipts(receipts: List<ImReadReceipt>) {}
+
     /** 全部会话未读总数变化。标记已读后会立刻回调，不等待 OpenIM 回包。 */
     fun onTotalUnreadCountChanged(count: Int) {}
 

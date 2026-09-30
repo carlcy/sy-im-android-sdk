@@ -65,6 +65,7 @@ class ImEngine private constructor(
                 { eventListener },
                 { publish(tracker.upsert(it)) },
                 { publish(tracker.applyServerTotal(it)) },
+                { currentUserId },
             )
             val ok = openIm?.initSdk() == true
             if (!ok) {
@@ -413,6 +414,42 @@ class ImEngine private constructor(
         }
         openIm?.changeInputStates(conversationId, focus, mainCallback(callback))
             ?: callback?.onResult(false, -1, "OpenIM not initialized")
+    }
+
+    /**
+     * 群消息已读概况，三端同名同义。OpenIM Android 只给人数；[useControlPlane] 为 true 且
+     * [ImControlPlane.userJwt] 已设置时，再查控制面 who-read 花名册补已读成员（[ImGroupReadInfo.source] = `controlPlane`）。
+     * 花名册只含调用过 [ImControlPlane.reportGroupMessagesRead] 的成员。
+     */
+    @JvmOverloads
+    fun getGroupMessageReadInfo(
+        conversationId: String,
+        clientMsgId: String,
+        useControlPlane: Boolean = true,
+        callback: (ImGroupReadInfo?, Exception?) -> Unit,
+    ) {
+        if (config.useMock) {
+            mainHandler.post { callback(ImReadReceipts.merge(clientMsgId, 0, 0, emptyList(), null), null) }
+            return
+        }
+        val bridge = openIm ?: run {
+            mainHandler.post { callback(null, IllegalStateException("OpenIM bridge not initialized")) }
+            return
+        }
+        bridge.findGroupReadInfo(conversationId, clientMsgId) { hasRead, unread, seq, found, code, message ->
+            if (code != 0) {
+                mainHandler.post { callback(null, Exception("findMessageList failed: $code $message")) }
+                return@findGroupReadInfo
+            }
+            if (!useControlPlane || controlPlane.userJwt.isNullOrBlank() || !found) {
+                mainHandler.post { callback(ImReadReceipts.merge(clientMsgId, hasRead, unread, emptyList(), null), null) }
+                return@findGroupReadInfo
+            }
+            controlPlane.whoRead(conversationId, seq) { roster, err ->
+                if (err != null) Log.w(TAG, "who-read failed, counts only: ${err.message}")
+                callback(ImReadReceipts.merge(clientMsgId, hasRead, unread, emptyList(), roster), null)
+            }
+        }
     }
 
     /** 与 iOS / Flutter `getTotalUnreadCount` 同名，等同 [getUnreadCount]。 */

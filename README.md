@@ -134,6 +134,21 @@ engine.setUnreadListener { total, conversations ->
 
 原有 `getToken`、`addFriend`、`listFriends`、`createGroup`、`listGroups`、`send`、`history`、`revoke` 不变。
 
+## 已读回执（三端统一）
+
+| 项 | Android | iOS | Flutter |
+|---|---|---|---|
+| 统一事件 | `onRecvReadReceipts(List<ImReadReceipt>)` | `onRecvReadReceipts([SyImReadReceipt])` | `onRecvReadReceipts(List<SyImReadReceipt>)` |
+| 字段 | `conversationId` / `userId`（已读方）/ `groupId`（单聊 null）/ `msgIds` / `readTime`（ms，未知 0） | 同左 | 同左 |
+| 单聊 | OpenIM C2C 回执 | 同左 | 同左 |
+| 群聊事件 | OpenIM「消息 → 已读成员」转成「已读者 → 消息」 | OpenIM 按已读者 | **无**（flutter_openim_sdk 3.8.3 没有群回执监听） |
+| 查询 | `getGroupMessageReadInfo(conversationId, clientMsgId)` → `ImGroupReadInfo` | 同名 → `SyImGroupReadInfo` | 同名 → `SyImGroupReadInfo` |
+| 查询里的成员 id | OpenIM 只给人数 → 控制面花名册补 | OpenIM `hasReadUserIDList` | OpenIM 只给人数 → 控制面花名册补 |
+
+`ImGroupReadInfo`：`clientMsgId`、`hasReadCount`、`unreadCount`、`readUserIds`、`source`（`openim` / `controlPlane` / `none`）。
+控制面花名册：`ImControlPlane.whoRead(conversationId, seq)`（`POST /api/user/im/messages/who-read`），由 `reportGroupMessagesRead(userId, conversationId, seqs)`（mark-read `mode=msgs` + `seqs`）写入。**只包含调用过上报的成员**，不是全员已读名单；需设置 `controlPlane.userJwt`。
+旧回调 `onRecvC2CReadReceipt(readUserId, msgIds)`、`onRecvGroupReadReceipt(conversationId)` 保留。
+
 ## 表情回应与会话标签（控制面 lite）
 
 需要 `ImControlPlane.userJwt`。

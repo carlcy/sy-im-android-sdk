@@ -34,6 +34,7 @@ internal class OpenImBridge(
     private val listenerProvider: () -> ImEventListener?,
     private val onConversations: (List<ImConversation>) -> Unit,
     private val onTotalUnread: (Int) -> Unit,
+    private val selfUserId: () -> String? = { null },
 ) {
     private val tag = "SyOpenImBridge"
     private val inited = AtomicBoolean(false)
@@ -92,17 +93,32 @@ internal class OpenImBridge(
                     }
 
                     override fun onRecvC2CReadReceipt(list: MutableList<C2CReadReceiptInfo>?) {
-                        list.orEmpty().forEach { info ->
+                        val self = selfUserId() ?: ""
+                        val unified = list.orEmpty().map { info ->
                             listenerProvider()?.onRecvC2CReadReceipt(
                                 info.userID ?: "",
                                 info.msgIDList ?: emptyList(),
                             )
+                            ImReadReceipt(
+                                conversationId = ImReadReceipts.singleConversationId(self, info.userID ?: ""),
+                                userId = info.userID ?: "",
+                                groupId = null,
+                                msgIds = info.msgIDList ?: emptyList(),
+                                readTime = info.readTime,
+                            )
                         }
+                        if (unified.isNotEmpty()) listenerProvider()?.onRecvReadReceipts(unified)
                     }
 
                     override fun onRecvGroupMessageReadReceipt(receipt: GroupMessageReceipt?) {
                         if (receipt == null) return
-                        listenerProvider()?.onRecvGroupReadReceipt(receipt.conversationID ?: "")
+                        val cid = receipt.conversationID ?: ""
+                        listenerProvider()?.onRecvGroupReadReceipt(cid)
+                        val perMessage = receipt.groupMessageReadInfo.orEmpty().map { info ->
+                            (info.clientMsgID ?: "") to info.readMembers.orEmpty().mapNotNull { it.userID }
+                        }
+                        val unified = ImReadReceipts.perReader(cid, perMessage)
+                        if (unified.isNotEmpty()) listenerProvider()?.onRecvReadReceipts(unified)
                     }
                 },
             )
@@ -254,6 +270,36 @@ internal class OpenImBridge(
                     callback?.onResult(false, code, error)
                 }
             },
+        )
+    }
+
+    /**
+     * 本地查一条消息的群已读人数与 seq（OpenIM `findMessageList` → `attachedInfoElem.groupHasReadInfo`）。
+     * Android OpenIM 该结构只有人数，没有成员 id。callback(hasRead, unread, seq, found, code, msg)。
+     */
+    fun findGroupReadInfo(
+        conversationId: String,
+        clientMsgId: String,
+        callback: (hasRead: Int, unread: Int, seq: Long, found: Boolean, code: Int, message: String?) -> Unit,
+    ) {
+        val param = io.openim.android.sdk.models.SearchParams().apply {
+            conversationID = conversationId
+            clientMsgIDList = listOf(clientMsgId)
+        }
+        OpenIMClient.getInstance().messageManager.findMessageList(
+            object : OnBase<SearchResult> {
+                override fun onSuccess(data: SearchResult?) {
+                    val items = data?.findResultItems ?: data?.searchResultItems ?: emptyList()
+                    val msg = items.flatMap { it.messageList.orEmpty() }.firstOrNull { it.clientMsgID == clientMsgId }
+                    val info = msg?.attachedInfoElem?.groupHasReadInfo
+                    callback(info?.hasReadCount ?: 0, info?.unreadCount ?: 0, (msg?.seq ?: 0).toLong(), msg != null, 0, null)
+                }
+
+                override fun onError(code: Int, error: String?) {
+                    callback(0, 0, 0, false, code, error)
+                }
+            },
+            listOf(param),
         )
     }
 

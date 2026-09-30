@@ -291,6 +291,43 @@ class ImControlPlane(
         callback,
     )
 
+    /**
+     * 控制面已读花名册。`POST /api/user/im/messages/who-read`，body `{appId, conversationId, seq}`。
+     * 返回去重后的已读者 uid（最近已读在前）。花名册只含调用过 [reportGroupMessagesRead] 的成员。
+     */
+    fun whoRead(conversationId: String, seq: Long, callback: (List<String>?, Exception?) -> Unit) {
+        val body = JSONObject().put("appId", appId).put("conversationId", conversationId)
+        if (seq > 0) body.put("seq", seq)
+        executor.execute {
+            try {
+                val data = postJson("/api/user/im/messages/who-read", authHeaders(), body.toString())
+                val arr = data?.get("list") as? JSONArray ?: JSONArray()
+                val rows = (0 until arr.length()).mapNotNull { i ->
+                    (arr.opt(i) as? JSONObject)?.let { o -> o.keys().asSequence().associateWith { k -> o.opt(k) } }
+                }
+                val readers = ImReadReceipts.readersFromWhoRead(rows)
+                main.post { callback(readers, null) }
+            } catch (e: Exception) {
+                main.post { callback(null, e) }
+            }
+        }
+    }
+
+    /**
+     * 把本端已读的群消息写入控制面花名册（供 [whoRead] / [ImEngine.getGroupMessageReadInfo]）。
+     * `POST /api/user/im/conversations/mark-read`，`mode=msgs` + `seqs`；服务端同时向 OpenIM 标记这些消息已读。
+     */
+    fun reportGroupMessagesRead(
+        userId: String,
+        conversationId: String,
+        seqs: List<Long>,
+        callback: (Boolean, Exception?) -> Unit,
+    ) {
+        val body = JSONObject().put("appId", appId).put("userId", userId)
+            .put("conversationId", conversationId).put("mode", "msgs").put("seqs", JSONArray(seqs.filter { it > 0 }))
+        postUser("/api/user/im/conversations/mark-read", body, callback)
+    }
+
     /** 新建会话标签（每个用户自己的分组，服务端 DB）。`POST /api/user/im/conversations/tags/create`。返回 `tag`。 */
     fun createConversationTag(
         ownerUserId: String,
