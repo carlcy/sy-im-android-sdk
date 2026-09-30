@@ -134,6 +134,15 @@ engine.setUnreadListener { total, conversations ->
 
 原有 `getToken`、`addFriend`、`listFriends`、`createGroup`、`listGroups`、`send`、`history`、`revoke` 不变。
 
+## 表情回应与会话标签（控制面 lite）
+
+需要 `ImControlPlane.userJwt`。
+
+- `reactToMessage(fromUserId, emoji, toUserId / groupId, targetClientMsgId / targetSeq, add)` → `POST /api/user/im/reaction`。服务端发一条 Custom(110) 消息（`description` 为 `sy_reaction_lite`），对端在普通新消息回调里收到，用 `ImReaction.parse(customData)` 解析。**不是** OpenIM 原生回应（OpenIM 3.x 开源版没有消息回应接口），服务端也不做聚合计数，计数需客户端按消息累加。
+- 会话标签（每个用户自己的会话分组，存在 SY 服务端，与置顶无关）：`createConversationTag` / `listConversationTags` / `deleteConversationTag` / `addConversationsToTag` / `removeConversationsFromTag` → `/api/user/im/conversations/tags/*`。OpenIM 这一版没有会话分组接口。
+
+iOS（`SyImEngine.reactToMessage` 等）与 Flutter（`ImControlPlane.reactToMessage` 等）同名同参。
+
 ## 错误码
 
 控制面（`ImControlPlane`，即 `/api/user/im/…`、`/api/server/im/token`）失败时，回调里的 `Exception` 是 `ImControlPlaneException`：`code` 为服务端业务码，`httpStatus` 为 HTTP 状态。取值在 `ImErrorCode`，与 iOS `SyImErrorCode`、Flutter `SyImErrorCode` 相同：

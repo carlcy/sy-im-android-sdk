@@ -266,6 +266,69 @@ class ImControlPlane(
             callback,
         )
 
+    // ---- 表情回应（lite）与会话标签 ----
+
+    /**
+     * 对一条消息加 / 取消表情回应。`POST /api/user/im/reaction`。
+     *
+     * 服务端以 Custom(110) 消息发出（`data` 里 `sy=reaction_lite`），对端按普通自定义消息收到，
+     * 用 [ImReaction.parse] 解析。这不是 OpenIM 原生回应接口，也没有服务端聚合计数。
+     * 单聊传 [toUserId]，群聊传 [groupId]；目标消息用 [targetClientMsgId] 或 [targetSeq] 指定。
+     */
+    fun reactToMessage(
+        fromUserId: String,
+        emoji: String,
+        toUserId: String? = null,
+        groupId: String? = null,
+        targetClientMsgId: String? = null,
+        targetSeq: Long = 0,
+        targetSenderId: String? = null,
+        add: Boolean = true,
+        callback: (Map<String, Any>?, Exception?) -> Unit,
+    ) = postUserMap(
+        "/api/user/im/reaction",
+        reactionBody(appId, fromUserId, emoji, toUserId, groupId, targetClientMsgId, targetSeq, targetSenderId, add),
+        callback,
+    )
+
+    /** 新建会话标签（每个用户自己的分组，服务端 DB）。`POST /api/user/im/conversations/tags/create`。返回 `tag`。 */
+    fun createConversationTag(
+        ownerUserId: String,
+        name: String,
+        color: String = "",
+        remark: String = "",
+        callback: (Map<String, Any>?, Exception?) -> Unit,
+    ) = postUserMap(
+        "/api/user/im/conversations/tags/create",
+        JSONObject().put("appId", appId).put("ownerUserId", ownerUserId)
+            .put("name", name).put("color", color).put("remark", remark),
+        callback,
+    )
+
+    /** 列出会话标签，每项含 `id` / `name` / `memberCount` / `members`（会话 id，最多 200）。 */
+    fun listConversationTags(ownerUserId: String, callback: (JSONArray?, Exception?) -> Unit) =
+        postUserData(
+            "/api/user/im/conversations/tags/list",
+            JSONObject().put("appId", appId).put("ownerUserId", ownerUserId),
+            callback,
+        )
+
+    /** 删除会话标签。 */
+    fun deleteConversationTag(ownerUserId: String, tagId: Long, callback: (Boolean, Exception?) -> Unit) =
+        postUser(
+            "/api/user/im/conversations/tags/delete",
+            JSONObject().put("appId", appId).put("ownerUserId", ownerUserId).put("tagId", tagId),
+            callback,
+        )
+
+    /** 把会话加入标签。 */
+    fun addConversationsToTag(ownerUserId: String, tagId: Long, conversationIds: List<String>, callback: (Boolean, Exception?) -> Unit) =
+        postUser("/api/user/im/conversations/tags/members", tagMembersBody(appId, ownerUserId, tagId, "add", conversationIds), callback)
+
+    /** 把会话移出标签。 */
+    fun removeConversationsFromTag(ownerUserId: String, tagId: Long, conversationIds: List<String>, callback: (Boolean, Exception?) -> Unit) =
+        postUser("/api/user/im/conversations/tags/members", tagMembersBody(appId, ownerUserId, tagId, "remove", conversationIds), callback)
+
     // ---- internals ----
 
     private fun jsonArray(values: List<String>): JSONArray {
@@ -359,6 +422,23 @@ class ImControlPlane(
 
     companion object {
         private const val TAG = "ImControlPlane"
+
+        internal fun reactionBody(
+            appId: String, fromUserId: String, emoji: String, toUserId: String?, groupId: String?,
+            targetClientMsgId: String?, targetSeq: Long, targetSenderId: String?, add: Boolean,
+        ): JSONObject {
+            val body = JSONObject().put("appId", appId).put("fromUserId", fromUserId)
+                .put("emoji", emoji).put("action", if (add) "add" else "remove")
+            if (!groupId.isNullOrBlank()) body.put("groupId", groupId) else body.put("toUserId", toUserId ?: "")
+            if (!targetClientMsgId.isNullOrBlank()) body.put("targetClientMsgId", targetClientMsgId)
+            if (targetSeq > 0) body.put("targetSeq", targetSeq)
+            if (!targetSenderId.isNullOrBlank()) body.put("targetSenderId", targetSenderId)
+            return body
+        }
+
+        internal fun tagMembersBody(appId: String, ownerUserId: String, tagId: Long, action: String, ids: List<String>): JSONObject =
+            JSONObject().put("appId", appId).put("ownerUserId", ownerUserId).put("tagId", tagId)
+                .put("action", action).put("conversationIds", JSONArray(ids))
 
         internal fun parseBody(text: String): JSONObject =
             if (text.isBlank()) JSONObject() else try { JSONObject(text) } catch (_: Exception) { JSONObject() }
