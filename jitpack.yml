@@ -1,4 +1,6 @@
+# JitPack 构建 Android 库（AGP 8 需要 JDK 17）。
+# 构建环境已带 Android SDK；这里再确保 compileSdk 35。
 jdk:
   - openjdk17
 before_install:
-  - sdk-manager "build-tools;35.0.0" "platforms;android-35"
+  - sdkmanager "build-tools;35.0.0" "platforms;android-35"

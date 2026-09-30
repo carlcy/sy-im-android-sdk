@@ -16,7 +16,7 @@ import java.util.concurrent.Executors
  * SY IM 控制面 REST 封装（非 OpenIM 原生 SDK）。
  *
  * - getToken → POST /api/user/im/token 或 /api/server/im/token
- * - friends / groups / send / history / revoke → /api/user/im/…
+ * - friends / groups / send / history / revoke / conversations / unread → /api/user/im/…
  *
  * 实时收发仍依赖 OpenIM Android SDK（见 [OpenImBridge]）；本类负责控制面运维 API。
  * 不宣称腾讯云 TIM 全 API 对等。
@@ -138,7 +138,141 @@ class ImControlPlane(
         callback,
     )
 
+    /** 会话列表。`POST /api/user/im/conversations`。 */
+    fun listConversations(userId: String, callback: (JSONArray?, Exception?) -> Unit) =
+        postUserData(
+            "/api/user/im/conversations",
+            JSONObject().put("appId", appId).put("userId", userId),
+            callback,
+        )
+
+    /**
+     * 控制面标记已读。`POST /api/user/im/conversations/mark-read`。
+     * 实时已读回执优先用 [ImEngine.markConversationAsRead]（需已登录 OpenIM）。
+     */
+    fun markConversationRead(
+        userId: String,
+        conversationId: String? = null,
+        peerUserId: String? = null,
+        groupId: String? = null,
+        callback: (Boolean, Exception?) -> Unit,
+    ) {
+        val body = JSONObject().put("appId", appId).put("userId", userId)
+        if (!conversationId.isNullOrBlank()) body.put("conversationId", conversationId)
+        if (!peerUserId.isNullOrBlank()) body.put("peerUserId", peerUserId)
+        if (!groupId.isNullOrBlank()) body.put("groupId", groupId)
+        postUser("/api/user/im/conversations/mark-read", body, callback)
+    }
+
+    /**
+     * 未读总数。`POST /api/user/im/unread`，body `{ appId, userId, mode:"auto" }`，读 `data.totalUnread`。
+     */
+    fun getUnreadCount(userId: String, callback: (Int?, Exception?) -> Unit) {
+        postUserMap(
+            "/api/user/im/unread",
+            JSONObject().put("appId", appId).put("userId", userId).put("mode", "auto"),
+        ) { data, err ->
+            if (err != null) {
+                callback(null, err)
+                return@postUserMap
+            }
+            val count = when (val raw = data?.get("totalUnread")) {
+                is Number -> raw.toInt()
+                is String -> raw.toIntOrNull()
+                else -> null
+            }
+            if (count == null) callback(null, Exception("missing totalUnread"))
+            else callback(count, null)
+        }
+    }
+
+    /** 删除好友。`POST /api/user/im/friends/delete`。 */
+    fun deleteFriend(ownerUserId: String, friendUserId: String, callback: (Boolean, Exception?) -> Unit) =
+        postUser(
+            "/api/user/im/friends/delete",
+            JSONObject().put("appId", appId).put("ownerUserId", ownerUserId).put("friendUserId", friendUserId),
+            callback,
+        )
+
+    /** 收到的好友申请。`POST /api/user/im/friends/apply/list`。 */
+    fun listFriendApplications(userId: String, callback: (JSONArray?, Exception?) -> Unit) =
+        postUserData(
+            "/api/user/im/friends/apply/list",
+            JSONObject().put("appId", appId).put("userId", userId),
+            callback,
+        )
+
+    /** 同意好友申请。`POST /api/user/im/friends/apply/accept`。 */
+    fun acceptFriendApplication(
+        fromUserId: String,
+        toUserId: String,
+        handleMsg: String = "",
+        callback: (Boolean, Exception?) -> Unit,
+    ) = postUser(
+        "/api/user/im/friends/apply/accept",
+        JSONObject().put("appId", appId).put("fromUserId", fromUserId).put("toUserId", toUserId).put("handleMsg", handleMsg),
+        callback,
+    )
+
+    /** 拒绝好友申请。`POST /api/user/im/friends/apply/refuse`。 */
+    fun refuseFriendApplication(
+        fromUserId: String,
+        toUserId: String,
+        handleMsg: String = "",
+        callback: (Boolean, Exception?) -> Unit,
+    ) = postUser(
+        "/api/user/im/friends/apply/refuse",
+        JSONObject().put("appId", appId).put("fromUserId", fromUserId).put("toUserId", toUserId).put("handleMsg", handleMsg),
+        callback,
+    )
+
+    /** 群成员。`POST /api/user/im/groups/members`。 */
+    fun listGroupMembers(groupId: String, callback: (JSONArray?, Exception?) -> Unit) =
+        postUserData(
+            "/api/user/im/groups/members",
+            JSONObject().put("appId", appId).put("groupId", groupId),
+            callback,
+        )
+
+    /** 邀请入群。`POST /api/user/im/groups/invite`。 */
+    fun inviteGroupMembers(
+        groupId: String,
+        userIds: List<String>,
+        reason: String = "",
+        callback: (Boolean, Exception?) -> Unit,
+    ) = postUser(
+        "/api/user/im/groups/invite",
+        JSONObject().put("appId", appId).put("groupId", groupId).put("userIds", jsonArray(userIds)).put("reason", reason),
+        callback,
+    )
+
+    /** 踢出群成员。`POST /api/user/im/groups/kick`。 */
+    fun kickGroupMembers(
+        groupId: String,
+        userIds: List<String>,
+        reason: String = "",
+        callback: (Boolean, Exception?) -> Unit,
+    ) = postUser(
+        "/api/user/im/groups/kick",
+        JSONObject().put("appId", appId).put("groupId", groupId).put("userIds", jsonArray(userIds)).put("reason", reason),
+        callback,
+    )
+
+    /** 群禁言。`POST /api/user/im/groups/mute`。`mute=true` 开启全员禁言。 */
+    fun muteGroup(groupId: String, mute: Boolean, callback: (Boolean, Exception?) -> Unit) =
+        postUser(
+            "/api/user/im/groups/mute",
+            JSONObject().put("appId", appId).put("groupId", groupId).put("mute", mute),
+            callback,
+        )
+
     // ---- internals ----
+
+    private fun jsonArray(values: List<String>): JSONArray {
+        val arr = JSONArray()
+        values.forEach { arr.put(it) }
+        return arr
+    }
 
     private fun postUser(path: String, body: JSONObject, callback: (Boolean, Exception?) -> Unit) {
         executor.execute {

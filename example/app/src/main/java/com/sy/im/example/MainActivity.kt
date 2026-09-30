@@ -1,6 +1,7 @@
 package com.sy.im.example
 
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -8,9 +9,11 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.sy.im.sdk.ImConversationUnread
 import com.sy.im.sdk.ImEngine
 import com.sy.im.sdk.ImEventListener
 import com.sy.im.sdk.ImInitConfig
+import com.sy.im.sdk.ImUnreadListener
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,6 +35,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var logText: TextView
     private lateinit var logScroll: ScrollView
+    private lateinit var unreadBadge: TextView
+    private lateinit var conversationList: TextView
 
     private lateinit var checkMock: CheckBox
     private lateinit var inputAppId: EditText
@@ -51,6 +56,8 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         logText = findViewById(R.id.logText)
         logScroll = findViewById(R.id.logScroll)
+        unreadBadge = findViewById(R.id.unreadBadge)
+        conversationList = findViewById(R.id.conversationList)
 
         checkMock = findViewById(R.id.checkUseMock)
         inputAppId = findViewById(R.id.inputAppId)
@@ -76,6 +83,10 @@ class MainActivity : AppCompatActivity() {
                     imWsAddr = inputImWs.text.toString().trim(),
                 )
                 engine = ImEngine.init(this, config)
+                engine?.setUnreadListener(ImUnreadListener { total, conversations ->
+                    renderUnread(total, conversations)
+                    appendLog("unread total=$total conv=${conversations.size}")
+                })
                 engine?.setEventListener(object : ImEventListener {
                     override fun onConnectSuccess() = appendLog("onConnectSuccess")
                     override fun onConnectFailed(code: Int, error: String) =
@@ -134,6 +145,20 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 statusText.text = "Send fail: ${e.message}"
                 appendLog("send fail: ${e.message}")
+            }
+        }
+
+        findViewById<Button>(R.id.btnMarkRead).setOnClickListener {
+            val eng = engine
+            if (eng == null || !eng.isLoggedIn()) {
+                toast("先 Login")
+                return@setOnClickListener
+            }
+            eng.markConversationAsRead(userId = inputPeer.text.toString().trim()) { success, code, message ->
+                runOnUiThread {
+                    appendLog("markRead success=$success code=$code msg=$message")
+                    statusText.text = if (success) "已读" else "已读失败 $code"
+                }
             }
         }
 
@@ -225,6 +250,23 @@ class MainActivity : AppCompatActivity() {
                 imApiAddr = data.optString("imApiAddr", ""),
                 imWsAddr = data.optString("imWsAddr", ""),
             )
+        }
+    }
+
+    private fun renderUnread(total: Int, conversations: List<ImConversationUnread>) {
+        if (total > 0) {
+            unreadBadge.visibility = View.VISIBLE
+            unreadBadge.text = if (total > 99) "99+" else total.toString()
+        } else {
+            unreadBadge.visibility = View.GONE
+        }
+        conversationList.text = if (conversations.isEmpty()) {
+            "暂无会话"
+        } else {
+            conversations.joinToString("\n") { row ->
+                val who = row.groupId ?: row.userId ?: row.conversationId
+                "$who    未读 ${row.unreadCount}"
+            }
         }
     }
 
