@@ -80,6 +80,8 @@ dependencies {
     api("com.google.code.gson:gson:2.10.1")
 
     testImplementation("junit:junit:4.13.2")
+    // android.jar 里的 org.json 在 JVM 单测中是桩，解析测试需要真实实现。
+    testImplementation("org.json:json:20240303")
 }
 
 tasks.matching { it.name.endsWith("UnitTest") }.configureEach {

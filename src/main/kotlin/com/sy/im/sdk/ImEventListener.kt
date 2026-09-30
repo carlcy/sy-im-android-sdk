@@ -43,6 +43,9 @@ interface ImEventListener {
     /** 消息被撤回。 */
     fun onMessageRevoked(clientMsgId: String, revokerId: String) {}
 
-    /** 对方正在输入。内容为 OpenIM 原样字符串。 */
+    /** 对方正在输入。内容为 OpenIM 原样字符串；解析后的结构见 [onTypingStatus]。 */
     fun onTypingStatusChanged(data: String) {}
+
+    /** 对方输入状态（已解析）。`status.typing` 为 false 表示停止输入。与 iOS `onTypingStatusChanged(_:)` 对应。 */
+    fun onTypingStatus(status: ImTypingStatus) {}
 }

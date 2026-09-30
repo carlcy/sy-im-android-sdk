@@ -384,6 +384,9 @@ class ImEngine private constructor(
             local.typing(userId, typing)
             mainHandler.post {
                 eventListener?.onTypingStatusChanged(if (typing) userId else "")
+                eventListener?.onTypingStatus(
+                    ImTypingStatus(conversationId ?: local.conversationId(userId, null), userId, if (typing) listOf(2) else emptyList())
+                )
                 callback?.onResult(true, 0, "mock-typing-ok")
             }
             return
@@ -391,6 +394,78 @@ class ImEngine private constructor(
         openIm?.updateTyping(userId, conversationId, typing, mainCallback(callback))
             ?: callback?.onResult(false, -1, "OpenIM not initialized")
     }
+
+    /**
+     * 与 iOS `sendTyping(conversationId:focus:)` 同名。只调 OpenIM `changeInputStates`，
+     * 对端收到 [ImEventListener.onTypingStatus]。单聊会话 ID 形如 `si_<a>_<b>`。
+     */
+    @JvmOverloads
+    fun sendTyping(conversationId: String, focus: Boolean, callback: ImCallback? = null) {
+        check(loggedIn) { "login required" }
+        require(conversationId.isNotBlank()) { "conversationId blank" }
+        if (config.useMock) {
+            mainHandler.post {
+                val me = currentUserId ?: ""
+                eventListener?.onTypingStatus(ImTypingStatus(conversationId, me, if (focus) listOf(2) else emptyList()))
+                callback?.onResult(true, 0, "mock-typing-ok")
+            }
+            return
+        }
+        openIm?.changeInputStates(conversationId, focus, mainCallback(callback))
+            ?: callback?.onResult(false, -1, "OpenIM not initialized")
+    }
+
+    /** 与 iOS / Flutter `getTotalUnreadCount` 同名，等同 [getUnreadCount]。 */
+    fun getTotalUnreadCount(callback: (count: Int?, error: Exception?) -> Unit) = getUnreadCount(callback)
+
+    /** 与 iOS `recallMessage` 同名，等同 [revokeMessage]。 */
+    @JvmOverloads
+    fun recallMessage(conversationId: String, clientMsgId: String, callback: ImCallback? = null) =
+        revokeMessage(conversationId, clientMsgId, callback)
+
+    /**
+     * 本地会话列表（OpenIM `getAllConversationList`），与 iOS / Flutter `getConversations` 同名。
+     * Mock 模式返回本地会话（按未读快照）。
+     */
+    fun getConversations(callback: (List<ImConversation>?, Exception?) -> Unit) {
+        if (config.useMock) {
+            val list = local.snapshot().conversations.map {
+                ImConversation(
+                    conversationId = it.conversationId,
+                    userId = it.userId,
+                    groupId = it.groupId,
+                    showName = null,
+                    unreadCount = it.unreadCount,
+                    pinned = local.isPinned(it.conversationId),
+                    draft = local.draftOf(it.conversationId),
+                    doNotDisturb = local.isDoNotDisturb(it.conversationId),
+                )
+            }
+            mainHandler.post { callback(list, null) }
+            return
+        }
+        if (!loggedIn) {
+            mainHandler.post { callback(null, IllegalStateException("login required")) }
+            return
+        }
+        val bridge = openIm ?: run {
+            mainHandler.post { callback(null, IllegalStateException("OpenIM not initialized")) }
+            return
+        }
+        bridge.getAllConversations { list, code, message ->
+            mainHandler.post {
+                if (list != null) callback(list, null) else callback(null, Exception(message ?: "conversations failed ($code)"))
+            }
+        }
+    }
+
+    /** 与 iOS `setSelfCustomInfo` 同名，等同 [setSelfEx]。 */
+    @JvmOverloads
+    fun setSelfCustomInfo(ex: String, callback: ImCallback? = null) = setSelfEx(ex, callback)
+
+    /** 与 iOS / Flutter `setGroupCustomInfo` 同名，等同 [setGroupEx]。 */
+    @JvmOverloads
+    fun setGroupCustomInfo(groupId: String, ex: String, callback: ImCallback? = null) = setGroupEx(groupId, ex, callback)
 
     /** 自己的扩展资料。OpenIM `UserInfo.ex`。 */
     fun setSelfEx(ex: String, callback: ImCallback? = null) {

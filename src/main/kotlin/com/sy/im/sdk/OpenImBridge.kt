@@ -121,7 +121,9 @@ internal class OpenImBridge(
                     }
 
                     override fun onConversationUserInputStatusChanged(data: String?) {
-                        listenerProvider()?.onTypingStatusChanged(data ?: "")
+                        val listener = listenerProvider() ?: return
+                        listener.onTypingStatusChanged(data ?: "")
+                        ImTypingStatus.parse(data)?.let(listener::onTypingStatus)
                     }
                 },
             )
@@ -365,6 +367,10 @@ internal class OpenImBridge(
         if (!conversationId.isNullOrBlank()) {
             OpenIMClient.getInstance().conversationManager.changeInputStates(stringBase(null), conversationId, typing)
         }
+    }
+
+    fun changeInputStates(conversationId: String, focus: Boolean, callback: ImCallback?) {
+        OpenIMClient.getInstance().conversationManager.changeInputStates(stringBase(callback), conversationId, focus)
     }
 
     fun setSelfEx(ex: String, callback: ImCallback?) {

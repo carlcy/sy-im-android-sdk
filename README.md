@@ -111,13 +111,14 @@ engine.setUnreadListener { total, conversations ->
 
 | 能力 | 方法 |
 |------|------|
-| 撤回 | `revokeMessage` |
+| 撤回 | `revokeMessage`（iOS 同名别名 `recallMessage`） |
 | @ | `sendAtTextMessage`（`atAll = true` 时带 atAllTag） |
 | 搜索 | `searchLocalMessages` |
 | 置顶 / 草稿 / 免打扰 | `pinConversation` / `setConversationDraft` / `setConversationDoNotDisturb` |
-| 正在输入 | `updateTyping`，回调 `onTypingStatusChanged` |
+| 正在输入 | 发送：`sendTyping(conversationId, focus)`（与 iOS 同名，OpenIM `changeInputStates`）或旧的 `updateTyping`；接收：`onTypingStatus(ImTypingStatus)`（`typing` / `platformIds`），原样 JSON 仍走 `onTypingStatusChanged` |
 | 自定义消息 | `sendCustomMessage` |
-| 用户 / 群扩展资料 | `setSelfEx` / `setGroupEx` |
+| 用户 / 群扩展资料 | `setSelfEx` / `setGroupEx`（iOS 同名别名 `setSelfCustomInfo` / `setGroupCustomInfo`） |
+| 会话列表 / 总未读 | `getConversations`（OpenIM 本地会话）/ `getTotalUnreadCount`（= `getUnreadCount`） |
 | 黑名单 | `addToBlacklist` / `removeFromBlacklist` / `getBlacklist` |
 
 控制面 REST（先设置 `engine.controlPlane.userJwt`）与后台文档一致：
