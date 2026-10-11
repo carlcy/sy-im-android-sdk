@@ -3,7 +3,7 @@
 Demo 用客户同款坐标引入 SDK，不下载、不解压 AAR 或 zip。
 
 ```kotlin
-implementation("com.github.carlcy:sy-im-android-sdk:v0.5.0")
+implementation("com.github.carlcy:sy-im-android-sdk:v0.5.1")
 ```
 
 仓库：`google()`、`mavenCentral()`、`https://jitpack.io`（见 `settings.gradle.kts`）。版本在 `gradle.properties` 的 `syImSdkVersion`。

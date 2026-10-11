@@ -2,7 +2,7 @@
 
 SY 即时通信 Android SDK。产品路径对齐腾讯云 IM（仓库、依赖、初始化、登录、发消息），数据面封装 **OpenIM Android SDK**。不是腾讯云 TIM 的全 API 对等。
 
-**当前版本：0.5.0**（JitPack tag：`v0.5.0`）
+**当前版本：0.5.1**（JitPack tag：`v0.5.1`）
 
 客户只写一行坐标。OpenIM（`io.openim:android-sdk`、`io.openim:core-sdk`）和 Gson 写在本库 POM 里，Gradle 会从 Maven Central 自动带上，不必再下载或解压 AAR / zip。
 
@@ -33,11 +33,11 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.carlcy:sy-im-android-sdk:v0.5.0")
+    implementation("com.github.carlcy:sy-im-android-sdk:v0.5.1")
 }
 ```
 
-版本号是 Git tag（带 `v`）。把 `v0.5.0` 换成你要锁定的 tag。同步工程后即可编译，不要把 AAR 拷进 `libs/`。
+版本号是 Git tag（带 `v`）。把 `v0.5.1` 换成你要锁定的 tag。同步工程后即可编译，不要把 AAR 拷进 `libs/`。
 
 ### 3. 初始化
 
@@ -212,24 +212,24 @@ cd example && ./gradlew -PpreferMavenLocal=true :app:assembleDebug
 
 推荐路径是 **JitPack**（仓库已公开，不用搭 Maven 仓库，也不用签名）。`v0.4.1` 已在 JitPack 构建成功。
 
-1. 改 `VERSION`（只写 `0.5.0` 这种，不要带 `v`）。`build.gradle.kts` 会发布成 `v0.5.0`。
-2. 同步 `example/gradle.properties` 的 `syImSdkVersion=v0.5.0`，以及本 README 依赖行。
+1. 改 `VERSION`（只写 `0.5.1` 这种，不要带 `v`）。`build.gradle.kts` 会发布成 `v0.5.1`。
+2. 同步 `example/gradle.properties` 的 `syImSdkVersion=v0.5.1`，以及本 README 依赖行。
 3. 本地确认：
    ```bash
    ./gradlew assembleRelease publishToMavenLocal
    cd example && ./gradlew -PuseLocalSdk=true :app:assembleDebug
    cd example && ./gradlew -PpreferMavenLocal=true :app:assembleDebug
    ```
-   发布物在 `~/.m2/repository/com/github/carlcy/sy-im-android-sdk/v0.5.0/`。打开 POM，确认有 `io.openim:android-sdk` 和 `io.openim:core-sdk`，且没有 `groupId=*` 的 exclusion。
+   发布物在 `~/.m2/repository/com/github/carlcy/sy-im-android-sdk/v0.5.1/`。打开 POM，确认有 `io.openim:android-sdk` 和 `io.openim:core-sdk`，且没有 `groupId=*` 的 exclusion。
 4. 合并到 `main` 并推送。
 5. 打 tag 并推送（tag 必须带 `v`，且与依赖版本一致）：
    ```bash
-   git tag v0.5.0
-   git push origin v0.5.0
+   git tag v0.5.1
+   git push origin v0.5.1
    ```
-6. 打开 [jitpack.io/#carlcy/sy-im-android-sdk](https://jitpack.io/#carlcy/sy-im-android-sdk)，对 `v0.5.0` 点 Get it，或等客户第一次请求时触发构建。日志：`https://jitpack.io/com/github/carlcy/sy-im-android-sdk/v0.5.0/build.log`。状态为 ok 后，客户依赖就是：
+6. 打开 [jitpack.io/#carlcy/sy-im-android-sdk](https://jitpack.io/#carlcy/sy-im-android-sdk)，对 `v0.5.1` 点 Get it，或等客户第一次请求时触发构建。日志：`https://jitpack.io/com/github/carlcy/sy-im-android-sdk/v0.5.1/build.log`。状态为 ok 后，客户依赖就是：
    ```kotlin
-   implementation("com.github.carlcy:sy-im-android-sdk:v0.5.0")
+   implementation("com.github.carlcy:sy-im-android-sdk:v0.5.1")
    ```
 
 JitPack 使用仓库根目录的 `jitpack.yml`（JDK 17 + Android 35）和 `maven-publish`。不要改回 `@aar` 依赖写法，否则 POM 会丢掉 OpenIM 传递依赖。
@@ -244,7 +244,7 @@ JitPack 不需要这一步。若要发到 Maven Central，维护者自己准备�
 4. 用你的 groupId 发布（不要用 `com.github.carlcy` 传 Central）：
    ```bash
    ./gradlew publishReleasePublicationToOssrhRepository \
-     -Pgroup=你的.groupId -Pversion=0.5.0
+     -Pgroup=你的.groupId -Pversion=0.5.1
    ```
 5. 在 Central Portal 关闭并发布该 staging。仓库地址目前指向 `s01.oss.sonatype.org`；若 Portal 要求新的上传 URL，改 `build.gradle.kts` 里 `ossrh` 仓库的 `url`。
 

@@ -6,7 +6,7 @@ plugins {
 }
 
 // JitPack 坐标：com.github.carlcy:sy-im-android-sdk:<git tag>
-// 默认版本取 VERSION 文件并加上 v 前缀，与 tag（例如 v0.5.0）一致。
+// 默认版本取 VERSION 文件并加上 v 前缀，与 tag（例如 v0.5.1）一致。
 // JitPack / 本地发布可覆盖：-Pgroup=... -Pversion=...
 val requestedGroup = providers.gradleProperty("group").orNull
     ?.takeIf { it.isNotBlank() && it != "unspecified" }

@@ -10,7 +10,7 @@ class UnreadAndApiTest {
     @Test
     fun versionIsUnifiedAt050() {
         val fileVersion = File("VERSION").readText().trim().removePrefix("v")
-        assertEquals("0.5.0", fileVersion)
+        assertEquals("0.5.1", fileVersion)
         assertEquals(fileVersion, SyImSdk.VERSION)
     }
 
@@ -94,7 +94,7 @@ class UnreadAndApiTest {
             pom.isFile,
         )
         val text = pom.readText()
-        assertTrue(text.contains("<version>v0.5.0</version>") || text.contains("<version>0.5.0</version>"))
+        assertTrue(text.contains("<version>v0.5.1</version>") || text.contains("<version>0.5.1</version>"))
         assertTrue(text.contains("io.openim"))
         assertTrue(text.contains("android-sdk"))
         assertTrue(text.contains("core-sdk"))
